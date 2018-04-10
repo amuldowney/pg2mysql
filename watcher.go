@@ -32,6 +32,9 @@ type MigratorWatcher interface {
 	TableMigrationDidStart(tableName string)
 	TableMigrationDidFinish(tableName string, recordsInserted int64)
 
+	TableMigrationWithID(tableName string, identifier string)
+	TableMigrationWihoutID(tableName string)
+
 	DidMigrateRow(tableName string)
 	DidFailToMigrateRowWithError(tableName string, err error)
 }
@@ -111,6 +114,13 @@ func (s *StdoutPrinter) TruncateTableDidFinish(tableName string) {
 
 func (s *StdoutPrinter) TableMigrationDidStart(tableName string) {
 	fmt.Printf("Migrating %s...", tableName)
+}
+
+func (s *StdoutPrinter) TableMigrationWithID(tableName string, identifier string) {
+	fmt.Printf("Found identifier:%s to help migrate table:%s", identifier, tableName)
+}
+func (s *StdoutPrinter) TableMigrationWithoutID(tableName string) {
+	fmt.Printf("No identifying column found, manual merge for table %s", tableName)
 }
 
 func (s *StdoutPrinter) TableMigrationDidFinish(tableName string, recordsInserted int64) {

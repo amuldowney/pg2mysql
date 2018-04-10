@@ -82,16 +82,19 @@ func (m *migrator) Migrate() error {
 		m.watcher.TableMigrationDidStart(table.Name)
 
 		if table.HasColumn("id") {
+			m.watcher.TableMigrationWithID(table.Name, "id")
 			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "id", &recordsInserted, preparedStmt)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
 		} else if table.HasColumn("uuid") {
+			m.watcher.TableMigrationWithID(table.Name, "uuid")
 			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "uuid", &recordsInserted, preparedStmt)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
 		} else {
+			m.watcher.TableMigrationWihoutID(table.Name)
 			err = EachMissingRow(m.src, m.dst, table, func(scanArgs []interface{}) {
 				err = insert(preparedStmt, scanArgs)
 				if err != nil {
@@ -158,42 +161,57 @@ func migrateWithIDs(
 		table.Name,
 	)
 
+	var stmnts []string
+
 	if len(dstIDs) > 0 {
 		placeholders := make([]string, len(dstIDs))
+		x := 1
+		max := 65535
 		for i := range dstIDs {
-			placeholders[i] = fmt.Sprintf("$%d", i+1)
+			placeholders[i] = fmt.Sprintf("$%d", (i%(max+1) + 1))
+			if i == x*max {
+				stmnts = append(stmnts, fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(placeholders[(x-1)*max:x*max], ",")))
+				placeholders = make([]string, max)
+				x = x + 1
+			}
 		}
 
-		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(placeholders, ","))
+		//append(stmnts, fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(placeholders, ",")))
 	}
 
-	rows, err = src.DB().Query(stmt, dstIDs...)
-	if err != nil {
-		return fmt.Errorf("failed to select rows: %s", err)
-	}
-
-	for rows.Next() {
-		if err = rows.Scan(scanArgs...); err != nil {
-			return fmt.Errorf("failed to scan row: %s", err)
-		}
-
-		err = insert(preparedStmt, scanArgs)
+	for _, stmnt := range stmnts {
+		rows, err = src.DB().Query(stmnt, dstIDs...)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
-			continue
+			return fmt.Errorf("failed to select rows: %s", err)
 		}
 
-		*recordsInserted++
-	}
+		//rows, err = src.DB().Query(stmt, dstIDs...)
+		//if err != nil {
+		//	return fmt.Errorf("failed to select rows: %s", err)
+		//}
 
-	if err = rows.Err(); err != nil {
-		return fmt.Errorf("failed iterating through rows: %s", err)
-	}
+		for rows.Next() {
+			if err = rows.Scan(scanArgs...); err != nil {
+				return fmt.Errorf("failed to scan row: %s", err)
+			}
 
-	if err = rows.Close(); err != nil {
-		return fmt.Errorf("failed closing rows: %s", err)
-	}
+			err = insert(preparedStmt, scanArgs)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
+				continue
+			}
 
+			*recordsInserted++
+		}
+
+		if err = rows.Err(); err != nil {
+			return fmt.Errorf("failed iterating through rows: %s", err)
+		}
+
+		if err = rows.Close(); err != nil {
+			return fmt.Errorf("failed closing rows: %s", err)
+		}
+	}
 	return nil
 }
 

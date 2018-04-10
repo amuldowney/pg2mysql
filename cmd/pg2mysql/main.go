@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
+	"github.com/amuldowney/pg2mysql/commands"
 	flags "github.com/jessevdk/go-flags"
-	"github.com/pivotal-cf/pg2mysql/commands"
 )
 
 func main() {
