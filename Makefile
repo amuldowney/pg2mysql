@@ -5,5 +5,8 @@ all: linux
 linux:
 	GOOS=linux GOARCH=amd64 go build -o pg2mysql_linux cmd/pg2mysql/main.go
 
+macos:
+	GOOS=darwin GOARCH=amd64 go build -o pg2mysql_macos cmd/pg2mysql/main.go
+
 clean:
 	rm pg2mysql_linux

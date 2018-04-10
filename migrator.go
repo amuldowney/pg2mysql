@@ -82,7 +82,12 @@ func (m *migrator) Migrate() error {
 		m.watcher.TableMigrationDidStart(table.Name)
 
 		if table.HasColumn("id") {
-			err = migrateWithIDs(m.watcher, m.src, m.dst, table, &recordsInserted, preparedStmt)
+			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "id", &recordsInserted, preparedStmt)
+			if err != nil {
+				return fmt.Errorf("failed migrating table with ids: %s", err)
+			}
+		} else if table.HasColumn("uuid") {
+			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "uuid", &recordsInserted, preparedStmt)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
@@ -96,7 +101,7 @@ func (m *migrator) Migrate() error {
 				recordsInserted++
 			})
 			if err != nil {
-				return fmt.Errorf("failed migrating table without ids: %s", err)
+				return fmt.Errorf("failed migrating table without (uu)ids: %s", err)
 			}
 		}
 
@@ -111,6 +116,7 @@ func migrateWithIDs(
 	src DB,
 	dst DB,
 	table *Table,
+	identifier string,
 	recordsInserted *int64,
 	preparedStmt *sql.Stmt,
 ) error {
@@ -123,16 +129,16 @@ func migrateWithIDs(
 	}
 
 	// find ids already in dst
-	rows, err := dst.DB().Query(fmt.Sprintf("SELECT id FROM %s", table.Name))
+	rows, err := dst.DB().Query(fmt.Sprintf("SELECT %s FROM %s", identifier, table.Name))
 	if err != nil {
-		return fmt.Errorf("failed to select id from rows: %s", err)
+		return fmt.Errorf("failed to select %s from rows: %s", identifier, err)
 	}
 
 	var dstIDs []interface{}
 	for rows.Next() {
 		var id interface{}
 		if err = rows.Scan(&id); err != nil {
-			return fmt.Errorf("failed to scan id from row: %s", err)
+			return fmt.Errorf("failed to scan %s from row: %s", identifier, err)
 		}
 		dstIDs = append(dstIDs, id)
 	}
@@ -158,7 +164,7 @@ func migrateWithIDs(
 			placeholders[i] = fmt.Sprintf("$%d", i+1)
 		}
 
-		stmt = fmt.Sprintf("%s WHERE id NOT IN (%s)", stmt, strings.Join(placeholders, ","))
+		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(placeholders, ","))
 	}
 
 	rows, err = src.DB().Query(stmt, dstIDs...)
