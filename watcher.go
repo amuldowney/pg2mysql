@@ -33,7 +33,7 @@ type MigratorWatcher interface {
 	TableMigrationDidFinish(tableName string, recordsInserted int64)
 
 	TableMigrationWithID(tableName string, identifier string)
-	TableMigrationWihoutID(tableName string)
+	TableMigrationWithoutID(tableName string)
 
 	DidMigrateRow(tableName string)
 	DidFailToMigrateRowWithError(tableName string, err error)

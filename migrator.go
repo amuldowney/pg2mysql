@@ -94,7 +94,7 @@ func (m *migrator) Migrate() error {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
 		} else {
-			m.watcher.TableMigrationWihoutID(table.Name)
+			m.watcher.TableMigrationWithoutID(table.Name)
 			err = EachMissingRow(m.src, m.dst, table, func(scanArgs []interface{}) {
 				err = insert(preparedStmt, scanArgs)
 				if err != nil {
