@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -143,7 +144,7 @@ func migrateWithIDs(
 		if err = rows.Scan(&id); err != nil {
 			return fmt.Errorf("failed to scan %s from row: %s", identifier, err)
 		}
-		dstIDs = append(dstIDs, *id)
+		dstIDs = append(dstIDs, strconv.Quote(*id))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -164,7 +165,7 @@ func migrateWithIDs(
 	if len(dstIDs) > 0 {
 		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(dstIDs, ","))
 	}
-
+	fmt.Printf(stmt)
 	rows, err = src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)

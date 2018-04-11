@@ -117,10 +117,11 @@ func (s *StdoutPrinter) TableMigrationDidStart(tableName string) {
 }
 
 func (s *StdoutPrinter) TableMigrationWithID(tableName string, identifier string) {
-	fmt.Printf("Found identifier:%s to help migrate table:%s", identifier, tableName)
+	fmt.Printf("\nFound identifier:%s to help migrate table:%s\n", identifier, tableName)
 }
+
 func (s *StdoutPrinter) TableMigrationWithoutID(tableName string) {
-	fmt.Printf("No identifying column found, manual merge for table %s", tableName)
+	fmt.Printf("\nNo identifying column found, manual merge for table %s\n", tableName)
 }
 
 func (s *StdoutPrinter) TableMigrationDidFinish(tableName string, recordsInserted int64) {
