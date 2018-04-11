@@ -67,6 +67,17 @@ func (m *migrator) Migrate() error {
 			columnNamesForInsert[i] = fmt.Sprintf("`%s`", table.Columns[i].Name)
 			placeholders[i] = "?"
 		}
+		preparedInsert := fmt.Sprintf("(%s)", strings.Join(placeholders, ","))
+		preparedInserts := make([]string, 100)
+		for i, _ := range preparedInserts {
+			preparedInserts[i] = preparedInsert
+		}
+		preparedStmtMax, err := m.dst.DB().Prepare(fmt.Sprintf(
+			"INSERT INTO %s (%s) VALUES %s",
+			table.Name,
+			strings.Join(columnNamesForInsert, ","),
+			strings.Join(preparedInserts, ","),
+		))
 
 		preparedStmt, err := m.dst.DB().Prepare(fmt.Sprintf(
 			"INSERT INTO %s (%s) VALUES (%s)",
@@ -74,6 +85,7 @@ func (m *migrator) Migrate() error {
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(placeholders, ","),
 		))
+
 		if err != nil {
 			return fmt.Errorf("failed creating prepared statement: %s", err)
 		}
@@ -84,25 +96,25 @@ func (m *migrator) Migrate() error {
 
 		if table.HasColumn("id") {
 			m.watcher.TableMigrationWithID(table.Name, "id")
-			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "id", &recordsInserted, preparedStmt)
+			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "id", &recordsInserted, preparedStmt, preparedStmtMax)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
 		} else if table.HasColumn("uuid") {
 			m.watcher.TableMigrationWithID(table.Name, "uuid")
-			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "uuid", &recordsInserted, preparedStmt)
+			err = migrateWithIDs(m.watcher, m.src, m.dst, table, "uuid", &recordsInserted, preparedStmt, preparedStmtMax)
 			if err != nil {
 				return fmt.Errorf("failed migrating table with ids: %s", err)
 			}
 		} else {
 			m.watcher.TableMigrationWithoutID(table.Name)
 			err = EachMissingRow(m.src, m.dst, table, func(scanArgs []interface{}) {
-				err = insert(preparedStmt, scanArgs)
+				count, err := insert(preparedStmt, scanArgs)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
 					return
 				}
-				recordsInserted++
+				recordsInserted += count
 			})
 			if err != nil {
 				return fmt.Errorf("failed migrating table without (uu)ids: %s", err)
@@ -123,13 +135,14 @@ func migrateWithIDs(
 	identifier string,
 	recordsInserted *int64,
 	preparedStmt *sql.Stmt,
+	preparedStmtMax *sql.Stmt,
 ) error {
 	columnNamesForSelect := make([]string, len(table.Columns))
-	values := make([]interface{}, len(table.Columns))
-	scanArgs := make([]interface{}, len(table.Columns))
+	//values := make([]interface{}, len(table.Columns))
+	//scanArgs := make([]interface{}, len(table.Columns))
 	for i := range table.Columns {
 		columnNamesForSelect[i] = table.Columns[i].Name
-		scanArgs[i] = &values[i]
+		//scanArgs[i] = &values[i]
 	}
 
 	// find ids already in dst
@@ -165,24 +178,49 @@ func migrateWithIDs(
 	if len(dstIDs) > 0 {
 		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(dstIDs, ","))
 	}
-	fmt.Printf(stmt)
+
 	rows, err = src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)
 	}
 
+	argsArray := make([]interface{}, len(table.Columns)*100)
+	argsIndex := 0
 	for rows.Next() {
+		values := make([]interface{}, len(table.Columns))
+		scanArgs := make([]interface{}, len(table.Columns))
+		for i := range table.Columns {
+			//columnNamesForSelect[i] = table.Columns[i].Name
+			scanArgs[i] = &values[i]
+		}
+
 		if err = rows.Scan(scanArgs...); err != nil {
 			return fmt.Errorf("failed to scan row: %s", err)
 		}
 
-		err = insert(preparedStmt, scanArgs)
+		argsArray = append(argsArray, scanArgs...)
+		argsIndex++
+
+		if argsIndex >= 99 {
+			numInserted, err := insert(preparedStmtMax, scanArgs)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
+				continue
+			}
+			*recordsInserted += numInserted
+			argsArray = make([]interface{}, len(table.Columns)*100)
+			argsIndex = 0
+		}
+	}
+	//we have some leftovers
+	//and they're a total mess inside argsArray, len(columns worth etc)
+	for i := 0; i < len(argsArray); i += len(table.Columns) {
+		numInserted, err := insert(preparedStmt, argsArray[i:i+len(table.Columns)])
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
 			continue
 		}
-
-		*recordsInserted++
+		*recordsInserted += numInserted
 	}
 
 	if err = rows.Err(); err != nil {
@@ -196,20 +234,21 @@ func migrateWithIDs(
 	return nil
 }
 
-func insert(stmt *sql.Stmt, values []interface{}) error {
+func insert(stmt *sql.Stmt, values []interface{}) (int64, error) {
+
 	result, err := stmt.Exec(values...)
 	if err != nil {
-		return fmt.Errorf("failed to exec stmt: %s", err)
+		return 0, fmt.Errorf("failed to exec stmt: %s", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("failed getting rows affected by insert: %s", err)
+		return 0, fmt.Errorf("failed getting rows affected by insert: %s", err)
 	}
 
 	if rowsAffected == 0 {
-		return errors.New("no rows affected by insert")
+		return 0, errors.New("no rows affected by insert")
 	}
 
-	return nil
+	return rowsAffected, nil
 }
