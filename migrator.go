@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -157,7 +156,7 @@ func migrateWithIDs(
 		if err = rows.Scan(&id); err != nil {
 			return fmt.Errorf("failed to scan %s from row: %s", identifier, err)
 		}
-		dstIDs = append(dstIDs, strconv.Quote(*id))
+		dstIDs = append(dstIDs, (fmt.Sprintf("'%s'", *id)))
 	}
 
 	if err = rows.Err(); err != nil {
