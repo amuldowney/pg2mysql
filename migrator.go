@@ -178,7 +178,7 @@ func migrateWithIDs(
 	if len(dstIDs) > 0 {
 		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(dstIDs, ","))
 	}
-
+	watcher.PrintStatement(stmt)
 	rows, err = src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)
