@@ -72,28 +72,28 @@ func (m *migrator) Migrate() error {
 			preparedInserts[i] = preparedInsert
 		}
 		preparedStmtMax, err := m.dst.DB().Prepare(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES %s",
+			"INSERT INTO %s (%s) VALUES%s",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(preparedInserts, ","),
 		))
 
 		m.watcher.PrintStatement(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES %s",
+			"INSERT INTO %s (%s) VALUES%s",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(preparedInserts, ","),
 		))
 
 		preparedStmt, err := m.dst.DB().Prepare(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES (%s)",
+			"INSERT INTO %s (%s) VALUES(%s)",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(placeholders, ","),
 		))
 
 		m.watcher.PrintStatement(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES (%s)",
+			"INSERT INTO %s (%s) VALUES(%s)",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
 			strings.Join(placeholders, ","),
@@ -198,7 +198,6 @@ func migrateWithIDs(
 	}
 
 	argsArray := make([]interface{}, len(table.Columns)*100)
-	argsIndex := 0
 	for rows.Next() {
 		values := make([]interface{}, len(table.Columns))
 		scanArgs := make([]interface{}, len(table.Columns))
@@ -212,10 +211,9 @@ func migrateWithIDs(
 		}
 
 		argsArray = append(argsArray, scanArgs...)
-		argsIndex++
 
 		if len(argsArray) >= 99*len(table.Columns) {
-			//watcher.PrintStatement(preparedStmtMax)
+
 			numInserted, err := insert(preparedStmtMax, argsArray)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
@@ -223,7 +221,7 @@ func migrateWithIDs(
 			}
 			*recordsInserted += numInserted
 			argsArray = make([]interface{}, len(table.Columns)*100)
-			argsIndex = 0
+
 		}
 	}
 	//we have some leftovers
@@ -249,7 +247,7 @@ func migrateWithIDs(
 }
 
 func insert(stmt *sql.Stmt, values []interface{}) (int64, error) {
-
+	fmt.Println(values)
 	result, err := stmt.Exec(values...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to exec stmt: %s", err)
