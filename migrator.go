@@ -78,7 +78,21 @@ func (m *migrator) Migrate() error {
 			strings.Join(preparedInserts, ","),
 		))
 
+		m.watcher.PrintStatement(fmt.Sprintf(
+			"INSERT INTO %s (%s) VALUES %s",
+			table.Name,
+			strings.Join(columnNamesForInsert, ","),
+			strings.Join(preparedInserts, ","),
+		))
+
 		preparedStmt, err := m.dst.DB().Prepare(fmt.Sprintf(
+			"INSERT INTO %s (%s) VALUES (%s)",
+			table.Name,
+			strings.Join(columnNamesForInsert, ","),
+			strings.Join(placeholders, ","),
+		))
+
+		m.watcher.PrintStatement(fmt.Sprintf(
 			"INSERT INTO %s (%s) VALUES (%s)",
 			table.Name,
 			strings.Join(columnNamesForInsert, ","),
