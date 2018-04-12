@@ -197,7 +197,7 @@ func migrateWithIDs(
 		return fmt.Errorf("failed to select rows: %s", err)
 	}
 
-	argsArray := make([]interface{}, len(table.Columns)*100)
+	var argsArray []interface{}
 	for rows.Next() {
 		values := make([]interface{}, len(table.Columns))
 		scanArgs := make([]interface{}, len(table.Columns))
