@@ -177,7 +177,7 @@ func migrateWithIDs(
 	if len(dstIDs) > 0 {
 		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(dstIDs, ","))
 	}
-	watcher.PrintStatement(stmt)
+
 	rows, err = src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)
@@ -200,8 +200,9 @@ func migrateWithIDs(
 		argsArray = append(argsArray, scanArgs...)
 		argsIndex++
 
-		if argsIndex >= 99 {
-			numInserted, err := insert(preparedStmtMax, scanArgs)
+		if len(argsArray) >= 99*len(table.Columns) {
+			//watcher.PrintStatement(preparedStmtMax)
+			numInserted, err := insert(preparedStmtMax, argsArray)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
 				continue
@@ -212,7 +213,7 @@ func migrateWithIDs(
 		}
 	}
 	//we have some leftovers
-	//and they're a total mess inside argsArray, len(columns worth etc)
+	//and they're a total mess inside argsArray, len(columns)
 	for i := 0; i < len(argsArray); i += len(table.Columns) {
 		numInserted, err := insert(preparedStmt, argsArray[i:i+len(table.Columns)])
 		if err != nil {
