@@ -163,7 +163,7 @@ func migrateWithIDs(
 	if err != nil {
 		return fmt.Errorf("failed to select %s from rows: %s", identifier, err)
 	}
-
+	watcher.PrintStatement("finding row IDs in destination")
 	var dstIDs []string
 	for rows.Next() {
 		var id *string
@@ -191,12 +191,13 @@ func migrateWithIDs(
 	if len(dstIDs) > 0 {
 		stmt = fmt.Sprintf("%s WHERE %s NOT IN (%s)", stmt, identifier, strings.Join(dstIDs, ","))
 	}
-
+	watcher.PrintStatement("Retrieving new rows from source")
 	rows, err = src.DB().Query(stmt)
 	if err != nil {
 		return fmt.Errorf("failed to select rows: %s", err)
 	}
 
+	watcher.PrintStatement(fmt.Sprintf("Inserting missing rows into %s", table.Name))
 	for rows.Next() {
 		if err = rows.Scan(scanArgs...); err != nil {
 			return fmt.Errorf("failed to scan row: %s", err)
@@ -261,7 +262,6 @@ func migrateWithIDs(
 }
 
 func insert(stmt *sql.Stmt, values []interface{}) (int64, error) {
-	fmt.Println(values)
 	result, err := stmt.Exec(values...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to exec stmt: %s", err)
