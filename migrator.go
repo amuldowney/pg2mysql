@@ -78,12 +78,12 @@ func (m *migrator) Migrate() error {
 			strings.Join(preparedInserts, ","),
 		))
 
-		m.watcher.PrintStatement(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES%s",
-			table.Name,
-			strings.Join(columnNamesForInsert, ","),
-			strings.Join(preparedInserts, ","),
-		))
+		//m.watcher.PrintStatement(fmt.Sprintf(
+		//	"INSERT INTO %s (%s) VALUES%s",
+		//	table.Name,
+		//	strings.Join(columnNamesForInsert, ","),
+		//	strings.Join(preparedInserts, ","),
+		//))
 
 		preparedStmt, err := m.dst.DB().Prepare(fmt.Sprintf(
 			"INSERT INTO %s (%s) VALUES(%s)",
@@ -92,12 +92,12 @@ func (m *migrator) Migrate() error {
 			strings.Join(placeholders, ","),
 		))
 
-		m.watcher.PrintStatement(fmt.Sprintf(
-			"INSERT INTO %s (%s) VALUES(%s)",
-			table.Name,
-			strings.Join(columnNamesForInsert, ","),
-			strings.Join(placeholders, ","),
-		))
+		//m.watcher.PrintStatement(fmt.Sprintf(
+		//	"INSERT INTO %s (%s) VALUES(%s)",
+		//	table.Name,
+		//	strings.Join(columnNamesForInsert, ","),
+		//	strings.Join(placeholders, ","),
+		//))
 
 		if err != nil {
 			return fmt.Errorf("failed creating prepared statement: %s", err)
@@ -151,11 +151,11 @@ func migrateWithIDs(
 	preparedStmtMax *sql.Stmt,
 ) error {
 	columnNamesForSelect := make([]string, len(table.Columns))
-	//values := make([]interface{}, len(table.Columns))
-	//scanArgs := make([]interface{}, len(table.Columns))
+	values := make([]interface{}, len(table.Columns))
+	scanArgs := make([]interface{}, len(table.Columns))
 	for i := range table.Columns {
 		columnNamesForSelect[i] = table.Columns[i].Name
-		//scanArgs[i] = &values[i]
+		scanArgs[i] = &values[i]
 	}
 
 	// find ids already in dst
@@ -197,7 +197,21 @@ func migrateWithIDs(
 		return fmt.Errorf("failed to select rows: %s", err)
 	}
 
-	var argsArray []interface{}
+	for rows.Next() {
+		if err = rows.Scan(scanArgs...); err != nil {
+			return fmt.Errorf("failed to scan row: %s", err)
+		}
+
+		numInserted, err := insert(preparedStmt, scanArgs)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to insert into %s: %s\n", table.Name, err)
+			continue
+		}
+
+		*recordsInserted += numInserted
+	}
+
+	/* var argsArray []interface{}
 	for rows.Next() {
 		values := make([]interface{}, len(table.Columns))
 		scanArgs := make([]interface{}, len(table.Columns))
@@ -233,7 +247,7 @@ func migrateWithIDs(
 			continue
 		}
 		*recordsInserted += numInserted
-	}
+	} */
 
 	if err = rows.Err(); err != nil {
 		return fmt.Errorf("failed iterating through rows: %s", err)
